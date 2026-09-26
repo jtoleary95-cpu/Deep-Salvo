@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep Salvo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#D6E1DF; --panel:#E6EDEB; --ink:#17293B; --soft:#4F6573; --grid:#9DB2B4; --sea:#C3D4D3;
+  --ship:#3E5566; --hit:#B8322A; --brass:#8E6A28; --draft:#2F7A6B;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0E1B26; --panel:#15283A; --ink:#D6E2E0; --soft:#8FA5B0; --grid:#2C4556; --sea:#12263A;
+  --ship:#7B94A4; --hit:#E0574B; --brass:#C9A45A; --draft:#4FB39E; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1B26; --panel:#15283A; --ink:#D6E2E0; --soft:#8FA5B0; --grid:#2C4556; --sea:#12263A;
+  --ship:#7B94A4; --hit:#E0574B; --brass:#C9A45A; --draft:#4FB39E; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:500 16px/1.45 Barlow,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+#app{max-width:480px;margin:0 auto;padding:12px 14px 28px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+h1{font:800 2rem/1 "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.02em;margin:0}
+h2{font:800 1.35rem/1.1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:18px 0 8px;letter-spacing:.02em}
+p{margin:.4em 0}
+.muted{color:var(--soft)}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{border:2px solid var(--ink);background:transparent;border-radius:6px;padding:10px 14px;font-weight:600;min-height:44px}
+.btn.primary{background:var(--ink);color:var(--bg)}
+.btn.small{padding:6px 10px;min-height:36px;font-size:.9rem}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,.cell:focus-visible,input:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.stretch>*{flex:1}
+input.code{font:800 1.6rem "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.2em;text-transform:uppercase;width:100%;padding:8px 12px;border:2px solid var(--ink);border-radius:6px;background:var(--panel);color:var(--ink)}
+.codebox{background:var(--panel);border-left:4px solid var(--brass);padding:10px 12px;margin:8px 0 12px;border-radius:0 6px 6px 0}
+.codebox b{font:800 1.8rem "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.2em}
+.status{font:800 1.5rem/1.1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:6px 0 10px;min-height:1.7rem}
+.status.go{color:var(--hit)}
+.board{display:grid;grid-template-columns:1.1rem repeat(10,1fr);gap:2px;width:100%;margin:0 auto;user-select:none}
+.board.own{max-width:300px}
+.lab{font-size:.68rem;color:var(--soft);display:flex;align-items:center;justify-content:center}
+.cell{aspect-ratio:1;border:0;border-radius:2px;background:var(--sea);padding:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;line-height:1;position:relative}
+.cell[data-act="fire"]:active,.cell[data-act="place"]:active,.cell[data-act="movecell"]:active{transform:scale(.9)}
+.cell.ship{background:var(--ship)}
+.cell.sel{background:var(--brass)}
+.cell.ghost{background:transparent;outline:2px dashed var(--ship);outline-offset:-3px}
+.cell.draft{background:var(--draft)}
+.cell.hit{color:var(--hit);font-weight:800}
+.cell.hit::after{content:"✕"}
+.cell.ship.hit{color:#fff;background:var(--hit)}
+.cell.sunk{background:var(--hit);color:#fff}
+.cell.sunk::after{content:"✕"}
+.cell.miss::after{content:"";width:28%;height:28%;border-radius:50%;background:var(--ink);opacity:.7}
+.cell.stale::after{content:"";width:34%;height:34%;border-radius:50%;border:1.5px solid var(--soft);opacity:.7}
+.cell.target{background:var(--sea)}
+.board.armed .cell[data-act="fire"]{box-shadow:inset 0 0 0 1px var(--grid)}
+.tray{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.tray button{border:2px solid var(--ship);background:transparent;border-radius:6px;padding:6px 10px;font-weight:600;font-size:.9rem;min-height:40px}
+.tray button.on{background:var(--brass);border-color:var(--brass);color:#fff}
+.note{font-size:.9rem;color:var(--soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;font-weight:600;max-width:90vw;z-index:20;transition:opacity .2s}
+.toast[hidden]{display:block;opacity:0;pointer-events:none}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet .inner{background:var(--bg);width:100%;max-width:480px;max-height:85%;overflow:auto;border-radius:12px 12px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.snd{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;padding:10px 0;border-bottom:1px solid var(--grid)}
+.snd .name{font-weight:600}
+.snd .tag{font-size:.8rem;color:var(--brass);margin-left:6px}
+.snd .row{justify-content:flex-end}
+.rec{background:var(--hit)!important;color:#fff!important;border-color:var(--hit)!important}
+.banner{font:800 3rem/1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:8px 0}
+.cell.mine{color:var(--brass);font-weight:800}
+.cell.mine::after{content:"✹"}
+.seg{display:flex;gap:4px}.seg button{min-width:38px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.cell.so-ship{box-shadow:inset 0 0 0 3px var(--draft)}
+.cell.so-ship::after{content:"";width:40%;height:40%;border-radius:50%;background:var(--draft)}
+.cell.so-mine{box-shadow:inset 0 0 0 3px var(--draft);color:var(--draft)}
+.cell.so-mine::after{content:"✹"}
+.cell.so-empty{box-shadow:inset 0 0 0 1px var(--draft)}
+.cell.decoy{box-shadow:inset 0 0 0 2px var(--brass)}
+.cell.decoy.hit{background:var(--brass);color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1.5px solid var(--ship);border-radius:4px;padding:2px 8px;font-size:.85rem;font-weight:600}
+.chip.gone{text-decoration:line-through;opacity:.4}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);padding:10px 12px;border-radius:6px;margin:8px 0}
+.warn{border-left:4px solid var(--hit);background:var(--panel);padding:10px 12px;border-radius:0 6px 6px 0;margin:8px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"><p class="muted">Loading…</p></div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="filepick" accept="audio/*" hidden>
+<input type="file" id="recpick" accept="audio/*" capture hidden>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc as fdoc, getDoc, setDoc, updateDoc, onSnapshot, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ===== PASTE YOUR FIREBASE CONFIG HERE ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBcsUoFs2p9MBd_ZA5QdCznjmhYimHGmw0",
+  authDomain: "battle-ship-7f0d9.firebaseapp.com",
+  projectId: "battle-ship-7f0d9",
+  storageBucket: "battle-ship-7f0d9.firebasestorage.app",
+  messagingSenderId: "622001257172",
+  appId: "1:622001257172:web:841fb2a3f10a8d5ce11941"
+};
+/* =========================================== */
+
+function wrap(s){return{exists:s.exists(),data:()=>s.data(),metadata:s.metadata}}
+function makeDb(fs){return{doc(p){const r=fdoc(fs,p);return{
+  get:async()=>wrap(await getDoc(r)),set:d=>setDoc(r,d),update:d=>updateDoc(r,d),
+  onSnapshot:(n,e)=>onSnapshot(r,s=>n(wrap(s)),e)}}}}
+
+const N=10, ROWS="ABCDEFGHIJ";
+const FLEET=[{id:"carrier",name:"Carrier",len:5},{id:"battleship",name:"Battleship",len:4},{id:"cruiser",name:"Cruiser",len:3},{id:"sub",name:"Submarine",len:3},{id:"destroyer",name:"Destroyer",len:2}];
+const NAME=Object.fromEntries(FLEET.map(f=>[f.id,f.name]));NAME.decoy="Decoy";
+const DECOY={id:"decoy",name:"Decoy",len:1};const STALE=120000;
+const SOUNDS=[["fire","Fire"],["miss","Miss"],["hit","Hit"],["sunk","Ship sunk"],["move","Sub moved"],["mine","Sea mine"],["sonar","Sonar ping"],["win","Victory"],["lose","Defeat"]];
+
+let db=null, me=null, code=null, game=null, unsub=null, fleet=null, lastSeq=null, resolvingId=null, busy=false;
+let hb=null, mine=null, sonarMode=false, sel="carrier", placeV=false, moveDraft=null, sheet=false, recKey=null, recorder=null, pickKey=null;
+const custom={}, urls={};
+const app=document.getElementById("app");
+
+const lab=(r,c)=>ROWS[r]+(c+1);
+const rand=n=>Math.floor(Math.random()*n);
+function cells(s){const a=[];for(let i=0;i<s.len;i++)a.push([s.r+(s.v?i:0),s.c+(s.v?0:i)]);return a}
+function fits(s,ships,ignore){for(const[r,c]of cells(s)){if(r<0||c<0||r>=N||c>=N)return false;for(const o of ships){if(o.id===ignore||o.id===s.id)continue;if(cells(o).some(([a,b])=>a===r&&b===c))return false}}return true}
+function randomFleet(){for(;;){const ships=[];let ok=true;for(const f of FLEET){let p=false;for(let t=0;t<300&&!p;t++){const s={...f,v:Math.random()<.5,r:rand(N),c:rand(N)};if(fits(s,ships)){ships.push(s);p=true}}if(!p){ok=false;break}}if(ok)return ships}}
+function nearestFit(s,ships,ignore){if(fits(s,ships,ignore))return s;let best=null,bd=1e9;for(let r=0;r<N;r++)for(let c=0;c<N;c++){const n={...s,r,c};if(!fits(n,ships,ignore))continue;const d=(r-s.r)**2+(c-s.c)**2;if(d<bd){bd=d;best=n}}return best}
+function addDecoy(ships){const d=nearestFit({...DECOY,v:false,r:rand(N),c:rand(N)},ships);return d?[...ships,d]:ships}
+const blocked=st=>st==="hit"||st==="miss"||st==="mine";
+const shipAt=(r,c)=>fleet.find(s=>cells(s).some(([a,b])=>a===r&&b===c));
+function randomMine(avoid){const open=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(shipAt(r,c)||avoid.has(r+","+c))continue;open.push({r,c})}return open.length?{...open[rand(open.length)],n:0}:null}
+const statsKey=()=>"ds-stats-"+me;
+function getStats(){try{return {streak:0,charge:false,counted:[],...JSON.parse(lsGet(statsKey())||"{}")}}catch{return{streak:0,charge:false,counted:[]}}}
+function putStats(st){lsSet(statsKey(),JSON.stringify(st))}
+function recordResult(g){const st=getStats(),key=g.code+":"+(g.created||0);if(st.counted.includes(key))return;
+  st.counted=[...st.counted.slice(-30),key];let earned=false;
+  if(g.winner===me)st.streak=0;else{st.streak++;if(st.streak>=3){st.charge=true;st.streak=0;earned=true}}
+  putStats(st);if(earned)setTimeout(()=>toast("Three losses in a row. Sonar unlocked for a future game."),3200)}
+const canSonar=()=>myTurn()&&game.sonar&&getStats().charge&&!game.sonarUsed?.[me];
+const saveFleet=()=>fref().set({ships:fleet.map(({id,len,r,c,v})=>({id,len,r,c,v})),mine:mine||null});
+const newFleet=()=>game?.decoys?addDecoy(randomFleet()):randomFleet();
+const isDecoyAt=(r,c)=>fleet?.some(s=>s.id==="decoy"&&s.r===r&&s.c===c);
+const gone=(g,uid)=>Date.now()-(g.seen?.[uid]||0)>STALE;
+function lsGet(k){try{return localStorage.getItem(k)}catch{return null}}
+function lsSet(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}}
+let toastT;function toast(m){const t=document.getElementById("toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+const opp=()=>game?.players?.find(p=>p!==me)||null;
+const gref=()=>db.doc("games/"+code);
+const fref=()=>db.doc(`fleets/${code}_${me}`);
+const seq=()=>(game?.event?.seq||0)+1;
+
+/* ---------- audio ---------- */
+let ac=null;
+function actx(){if(!ac){const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;ac=new A()}if(ac.state==="suspended")ac.resume();return ac}
+function noise(a,d){const b=a.createBuffer(1,Math.floor(a.sampleRate*d),a.sampleRate),x=b.getChannelData(0);for(let i=0;i<x.length;i++)x[i]=Math.random()*2-1;const s=a.createBufferSource();s.buffer=b;return s}
+function env(g,t,p,d){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(p,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+d)}
+function tone(a,t,f1,f2,d,p,type="sine"){const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f1,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);env(g,t,p,d);o.connect(g).connect(a.destination);o.start(t);o.stop(t+d+.05)}
+function hiss(a,t,type,f1,f2,d,p){const n=noise(a,d),f=a.createBiquadFilter(),g=a.createGain();f.type=type;f.frequency.setValueAtTime(f1,t);f.frequency.exponentialRampToValueAtTime(f2,t+d);env(g,t,p,d);n.connect(f).connect(g).connect(a.destination);n.start(t)}
+const SYNTH={
+  fire:(a,t)=>{tone(a,t,170,40,.4,.8);hiss(a,t,"lowpass",1400,300,.3,.4)},
+  miss:(a,t)=>{hiss(a,t,"bandpass",3200,450,.9,.55)},
+  hit:(a,t)=>{hiss(a,t,"lowpass",2400,80,1.2,1);tone(a,t,95,30,.8,.9)},
+  sunk:(a,t)=>{hiss(a,t,"lowpass",2400,60,2.2,1);tone(a,t,110,28,1.6,.9);tone(a,t+.25,70,25,2,.6,"sawtooth")},
+  mine:(a,t)=>{hiss(a,t,"lowpass",3000,60,2.4,1);tone(a,t,120,25,1.8,.9);tone(a,t+.05,760,320,1.2,.25,"triangle");hiss(a,t+.35,"lowpass",1800,60,1.4,.7)},
+  sonar:(a,t)=>{[0,.35,.7].forEach((d,i)=>tone(a,t+d,1500-i*150,1400-i*150,.5,.4-i*.1))},
+  move:(a,t)=>{tone(a,t,1250,1180,.7,.5);tone(a,t+.5,1250,1180,.7,.18)},
+  win:(a,t)=>[392,523,659,784].forEach((f,i)=>tone(a,t+i*.14,f,0,.35,.35,"triangle")),
+  lose:(a,t)=>[392,330,262,196].forEach((f,i)=>tone(a,t+i*.2,f,0,.45,.35,"triangle"))
+};
+function play(k){if(urls[k]){const au=new Audio(urls[k]);au.play().catch(()=>{});return}const a=actx();if(a)SYNTH[k](a,a.currentTime+.02)}
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("deep-salvo-sounds",1);r.onupgradeneeded=()=>r.result.createObjectStore("s");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbPut(k,v){const d=await idb();return new Promise((res,rej)=>{const tx=d.transaction("s","readwrite"),st=tx.objectStore("s");v==null?st.delete(k):st.put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
+async function idbAll(){const d=await idb();return new Promise(res=>{const out={},rq=d.transaction("s").objectStore("s").openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){out[c.key]=c.value;c.continue()}else res(out)};rq.onerror=()=>res(out)})}
+function setCustom(k,blob){if(urls[k])URL.revokeObjectURL(urls[k]);if(blob){custom[k]=blob;urls[k]=URL.createObjectURL(blob)}else{delete custom[k];delete urls[k]}}
+async function saveSound(k,blob){setCustom(k,blob);try{await idbPut(k,blob||null)}catch{toast("Sound works now but couldn't be saved on this phone")}render()}
+
+/* ---------- game flow ---------- */
+function genCode(){const A="ABCDEFGHJKLMNPQRSTUVWXYZ";return Array.from({length:4},()=>A[rand(A.length)]).join("")}
+async function createGame(){if(busy)return;busy=true;const c=genCode();
+  try{await db.doc("games/"+c).set({code:c,players:[me],ready:{},shots:{[me]:[]},seen:{[me]:Date.now()},decoys:false,mine:false,mineWait:0,sonar:false,turn:me,pending:null,subMovedAt:{},event:{seq:0},winner:null,created:Date.now()});await openGame(c)}
+  catch(e){toast("Couldn't create a game. Check your connection.")}busy=false}
+async function joinGame(raw){const c=(raw||"").trim().toUpperCase();if(c.length!==4){toast("Codes are 4 letters");return}if(busy)return;busy=true;
+  try{const ref=db.doc("games/"+c),s=await ref.get();if(!s.exists){toast("No game with code "+c);busy=false;return}
+    const g=s.data(),now=Date.now();
+    if(!g.players.includes(me)){
+      if(g.winner){toast("That game has ended");busy=false;return}
+      const started=g.players.length===2&&g.players.every(p=>g.ready?.[p]);
+      let keep=g.players,upd={};
+      if(g.players.length>=2){const left=g.players.find(p=>gone(g,p));
+        if(!left){toast("That game already has two players");busy=false;return}
+        if(started){toast("That game is already in progress");busy=false;return}
+        keep=g.players.filter(p=>p!==left);upd={["ready."+left]:deleteField(),["shots."+left]:deleteField(),["seen."+left]:deleteField()}}
+      await ref.update({...upd,players:[...keep,me],["shots."+me]:[],["seen."+me]:now,turn:keep[0]||me})}
+    await openGame(c)}catch(e){toast(`Couldn't join (${e?.code||"unknown"}). Try again.`)}busy=false}
+async function openGame(c){if(unsub)unsub();code=c;lsSet("ds-code",c);game=null;lastSeq=null;resolvingId=null;moveDraft=null;
+  fleet=null;mine=null;try{const f=await fref().get();if(f.exists){fleet=f.data().ships;mine=f.data().mine||null}}catch{}
+  if(!fleet)fleet=randomFleet();
+  startHb();
+  unsub=gref().onSnapshot(snap=>{if(!snap.exists){if(snap.metadata.fromCache)return;toast("That game no longer exists");leave();return}onGame(snap.data())},()=>{toast("Lost the connection. Reopen the game.")});
+  render()}
+function localLeave(){if(unsub)unsub();unsub=null;stopHb();sonarMode=false;code=null;game=null;fleet=null;moveDraft=null;lsSet("ds-code",null);render()}
+async function leave(){const g=game;if(unsub)unsub();unsub=null;
+  if(g&&g.players.includes(me)&&!g.winner){const o=opp();
+    try{if(bothReady())await gref().update({winner:o,turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:me,final:true}});
+      else{const keep=g.players.filter(p=>p!==me);await gref().update({players:keep,turn:keep[0]||null,["ready."+me]:deleteField(),["shots."+me]:deleteField(),["seen."+me]:deleteField()})}}catch{}}
+  localLeave()}
+function beat(){if(code&&game&&game.players.includes(me)&&!document.hidden)gref().update({["seen."+me]:Date.now()}).catch(()=>{})}
+function startHb(){stopHb();hb=setInterval(()=>{beat();render()},30000)}
+function stopHb(){if(hb)clearInterval(hb);hb=null}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){beat();render()}});
+function onGame(g){const first=!game;game=g;
+  if(!g.players.includes(me)){toast("You're no longer in that game");localLeave();return}
+  if(first)beat();
+  if(g.winner)recordResult(g);
+  if(!myTurnFor(g))sonarMode=false;
+  if(fleet&&!g.ready?.[me]){const hasD=fleet.some(s=>s.id==="decoy");if(g.decoys&&!hasD)fleet=addDecoy(fleet);if(!g.decoys&&hasD){fleet=fleet.filter(s=>s.id!=="decoy");if(sel==="decoy")sel="carrier"}}
+  const ev=g.event||{seq:0};
+  if(lastSeq===null)lastSeq=ev.seq;else if(ev.seq>lastSeq){lastSeq=ev.seq;announce(ev)}
+  if(g.pending&&g.pending.by!==me&&g.players.includes(me)&&g.ready?.[me]&&g.pending.id!==resolvingId)resolve(g);
+  render()}
+function announce(ev){const mine=ev.by===me,at=ev.r!=null?lab(ev.r,ev.c):"";
+  if(ev.type==="fire"){play("fire");return}
+  if(ev.type==="miss"){play("miss");toast(mine?`Miss at ${at}`:`They missed at ${at}`)}
+  if(ev.type==="hit"){play("hit");toast(mine?`Hit at ${at}!`:isDecoyAt(ev.r,ev.c)?`They hit your decoy at ${at}`:`They hit you at ${at}`)}
+  if(ev.type==="mine"){play("mine");const names=(ev.sunkList||[]).map(x=>NAME[x]).join(" and ");
+    toast(mine?`Sea mine at ${at}! ${ev.hits?`${ev.hits} enemy square${ev.hits>1?"s":""} hit`:"Nothing nearby"}${names?`, sank their ${names}`:""}`:`They set off your mine at ${at}${ev.hits?`: ${ev.hits} of your squares hit`:""}${names?`, lost your ${names}`:""}`);
+    if(ev.final)setTimeout(()=>play(mine?"win":"lose"),1800)}
+  if(ev.type==="ping"){play("sonar");if(!mine)toast(`Enemy sonar pinging near ${at}`)}
+  if(ev.type==="sonar"&&mine)toast(`Sonar: ${ev.contacts} contact${ev.contacts===1?"":"s"} around ${at}`)
+  if(ev.type==="forfeit"){if(!mine){toast("Opponent left. You win.");play("win")}}
+  if(ev.type==="sunk"){play("sunk");toast(mine?`You sank their ${NAME[ev.ship]}`:`They sank your ${NAME[ev.ship]}`);if(ev.final)setTimeout(()=>play(mine?"win":"lose"),1600)}
+  if(ev.type==="move"){play("move");toast(mine?"Submarine relocated":"Enemy submarine has moved. Old misses are open again.")}}
+async function resolve(g){const p=g.pending;resolvingId=p.id;const att=p.by,arr=[...(g.shots?.[att]||[])];
+  if(p.kind==="sonar"){const out={};let contacts=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=p.r+dr,c=p.c+dc;if(r<0||c<0||r>=N||c>=N)continue;
+      const v=mine&&mine.r===r&&mine.c===c?"mine":shipAt(r,c)?"ship":"empty";if(v!=="empty")contacts++;out[r+","+c]=v}
+    try{await gref().update({pending:null,["pings."+att]:{r:p.r,c:p.c,cells:out},event:{seq:(g.event?.seq||0)+1,type:"sonar",by:att,r:p.r,c:p.c,contacts}})}
+    catch{resolvingId=null;toast("Couldn't answer the sonar ping. Retrying on next update.")}return}
+  const prevSunk=new Set(arr.filter(x=>x.sunk).map(x=>x.sunk)),newE=[];
+  const boom=!!(mine&&mine.r===p.r&&mine.c===p.c);
+  if(boom){newE.push({r:p.r,c:p.c,res:"mine"});const had=new Set(arr.filter(x=>x.res==="hit").map(x=>x.r+","+x.c));
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=p.r+dr,c=p.c+dc;if(r<0||c<0||r>=N||c>=N)continue;if(shipAt(r,c)&&!had.has(r+","+c))newE.push({r,c,res:"hit"})}}
+  else newE.push({r:p.r,c:p.c,res:shipAt(p.r,p.c)?"hit":"miss"});
+  arr.push(...newE);
+  const hs=new Set(arr.filter(x=>x.res==="hit").map(x=>x.r+","+x.c)),real=fleet.filter(s=>s.id!=="decoy"),sunk=[];
+  for(const sh of real){if(prevSunk.has(sh.id)||!cells(sh).every(([r,c])=>hs.has(r+","+c)))continue;
+    const e=[...newE].reverse().find(x=>x.res==="hit"&&cells(sh).some(([r,c])=>r===x.r&&c===x.c));if(e){e.sunk=sh.id;e.cells=cells(sh).map(([r,c])=>r+","+c);sunk.push(sh.id)}}
+  const won=real.every(sh=>cells(sh).every(([r,c])=>hs.has(r+","+c)));
+  const type=boom?"mine":sunk.length?"sunk":newE[0].res;
+  const upd={["shots."+att]:arr,pending:null,turn:won?null:me,event:{seq:(g.event?.seq||0)+1,type,by:att,r:p.r,c:p.c,ship:sunk[0]||null,sunkList:sunk,hits:newE.filter(x=>x.res==="hit").length,final:won}};
+  if(won)upd.winner=att;
+  try{await gref().update(upd)}catch{resolvingId=null;toast("Couldn't report the shot. Retrying on next update.");return}
+  if(boom)mine=null;
+  else if(mine){mine.n=(mine.n||0)+1;if(mine.n>(g.mineWait||1))mine=randomMine(new Set(arr.map(x=>x.r+","+x.c)))}
+  if(boom||g.mine)saveFleet().catch(()=>{})}
+const RANK={stale:1,miss:2,mine:3,hit:4};
+function shotsAt(list,staleFrom){const m={};(list||[]).forEach((s,i)=>{const k=s.r+","+s.c;const st=s.res==="hit"?"hit":s.res==="mine"?"mine":(i>=staleFrom?"miss":"stale");if(!m[k]||RANK[st]>RANK[m[k]])m[k]=st;if(s.cells)s.cells.forEach(x=>m["S"+x]=1)});return m}
+function targetMap(){return shotsAt(game.shots?.[me],game.subMovedAt?.[opp()]??0)}
+function incomingMap(){return shotsAt(game.shots?.[opp()],game.subMovedAt?.[me]??0)}
+const bothReady=()=>game&&game.players.length===2&&game.players.every(p=>game.ready?.[p]);
+const myTurnFor=g=>g.players.length===2&&g.players.every(p=>g.ready?.[p])&&!g.winner&&g.turn===me&&!g.pending;
+const myTurn=()=>bothReady()&&!game.winner&&game.turn===me&&!game.pending;
+function subDamaged(){const sub=fleet.find(s=>s.id==="sub"),m=incomingMap();return cells(sub).some(([r,c])=>m[r+","+c]==="hit")}
+const canMove=()=>myTurn()&&game.subMovedAt?.[me]===undefined&&!subDamaged();
+async function fire(r,c){if(!myTurn()||busy)return;const st=targetMap()[r+","+c];if(blocked(st))return;actx();busy=true;
+  try{await gref().update({pending:{id:Math.random().toString(36).slice(2),by:me,r,c},event:{seq:seq(),type:"fire",by:me,r,c}})}catch{toast("Shot didn't go through. Try again.")}busy=false}
+async function dropSonar(r,c){if(!canSonar()||busy)return;busy=true;
+  try{await gref().update({pending:{id:Math.random().toString(36).slice(2),by:me,r,c,kind:"sonar"},["sonarUsed."+me]:true,event:{seq:seq(),type:"ping",by:me,r,c}});
+    const st=getStats();st.charge=false;putStats(st);sonarMode=false}catch{toast("Sonar didn't go through. Try again.")}busy=false;render()}
+async function ready(){if(busy)return;actx();busy=true;
+  let step="fleet";
+  try{mine=game.mine?randomMine(new Set()):null;await saveFleet();step="ready";await gref().update({["ready."+me]:true})}
+  catch(e){toast(`Couldn't save (${step}: ${e?.code||e?.message||"unknown"}). Try again.`)}busy=false}
+async function confirmMove(){if(!canMove()||busy||!moveDraft)return;busy=true;const next=fleet.map(s=>s.id==="sub"?{...moveDraft}:s);
+  try{const prevFleet=fleet;fleet=next;if(mine&&shipAt(mine.r,mine.c))mine=randomMine(new Set((game.shots?.[opp()]||[]).map(x=>x.r+","+x.c)));try{await saveFleet()}catch(e){fleet=prevFleet;throw e}
+    await gref().update({["subMovedAt."+me]:(game.shots?.[opp()]||[]).length,turn:opp(),event:{seq:seq(),type:"move",by:me}});moveDraft=null}
+  catch{toast("Move failed. Your sub stayed put.")}busy=false;render()}
+
+/* ---------- render ---------- */
+function board(kind){const tm=kind==="target"?targetMap():null,im=kind!=="target"&&game&&game.players.length===2?incomingMap():{};const armed=kind==="target"&&myTurn();
+  let h=`<div class="board ${kind}${armed?" armed":""}"><span class="lab"></span>`;for(let c=0;c<N;c++)h+=`<span class="lab">${c+1}</span>`;
+  const own=kind==="move"?fleet.filter(s=>s.id!=="sub"):fleet;
+  for(let r=0;r<N;r++){h+=`<span class="lab">${ROWS[r]}</span>`;for(let c=0;c<N;c++){const k=r+","+c;let cls=[],act="";
+    if(kind==="target"){if(tm["S"+k])cls.push("sunk");else if(tm[k])cls.push(tm[k]);else{const so=game.pings?.[me]?.cells?.[k];if(so)cls.push("so-"+so)}if(sonarMode&&armed)act="sonarcell";else if(armed&&!blocked(tm[k])&&!tm["S"+k])act="fire"}
+    else{const ship=own.find(s=>cells(s).some(([a,b])=>a===r&&b===c));if(ship)cls.push(kind==="place"&&ship.id===sel?"sel":ship.id==="decoy"?"decoy":"ship");
+      if(kind==="move"){const orig=fleet.find(s=>s.id==="sub");if(moveDraft&&cells(moveDraft).some(([a,b])=>a===r&&b===c))cls.push("draft");else if(cells(orig).some(([a,b])=>a===r&&b===c))cls.push("ghost");act="movecell"}
+      if(kind==="place")act="place";if(im[k])cls.push(im[k])}
+    h+=`<button class="cell ${cls.join(" ")}" ${act?`data-act="${act}"`:'tabindex="-1"'} data-r="${r}" data-c="${c}" aria-label="${lab(r,c)} ${cls.join(" ")}"></button>`}}
+  return h+"</div>"}
+function hdr(){return `<header><h1>Deep Salvo</h1><div class="row">${code?`<button class="btn small" data-act="leave">Leave</button>`:""}<button class="btn small" data-act="sounds">Sounds</button></div></header>`}
+function render(){let h=hdr();
+  if(!db){h+=firebaseConfig.apiKey?`<p class="muted">Connecting…</p>`:`<p>Add your Firebase config at the top of this file to play.</p>`}
+  else if(!code){h+=`<p class="muted">Classic 10×10 naval battle for two phones. Each side may relocate its submarine once, if it hasn't been hit.</p>
+    <h2>Start a game</h2><button class="btn primary" data-act="new" style="width:100%">New game</button>
+    <h2>Join a game</h2><div class="row stretch"><input class="code" id="joincode" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button class="btn primary" data-act="join" style="flex:0 0 auto">Join</button></div>`}
+  else if(!game){h+=`<p class="muted">Connecting to game ${code}…</p>`}
+  else{const two=game.players.length===2,iReady=!!game.ready?.[me],o=opp();
+    if(!two)h+=`<div class="codebox">Send this code to your opponent<br><b>${code}</b><div class="row" style="margin-top:8px"><button class="btn small" data-act="invite">Send invite link</button></div></div>`;
+    if(!iReady){h+=`<div class="status">Position your fleet</div><p class="note">Pick a ship, then tap where its bow goes.</p>
+      ${decoyRow()}<div class="tray">${(game.decoys?[...FLEET,DECOY]:FLEET).map(f=>`<button class="${sel===f.id?"on":""}" data-act="pick" data-id="${f.id}">${f.name} ${f.len}</button>`).join("")}</div>
+      ${board("place")}<div class="row" style="margin-top:12px"><button class="btn" data-act="rotate">${placeV?"Vertical":"Horizontal"}</button><button class="btn" data-act="shuffle">Shuffle</button><button class="btn primary" data-act="ready" style="margin-left:auto">Ready</button></div>`}
+    else if(!bothReady()){h+=`<div class="status">Fleet deployed</div><p class="muted">${!two?"Waiting for your opponent to join.":gone(game,o)?"Your opponent left. Send the code again and a new player can take the open seat.":"Waiting for your opponent to deploy."}</p><p class="note">${settingsSummary()}</p>`}
+    else if(moveDraft){h+=`<div class="status">Move your submarine</div><p class="note">Tap a new bow position. Moving uses your turn.</p>${board("move")}
+      <div class="row" style="margin-top:12px"><button class="btn" data-act="mrotate">${moveDraft.v?"Vertical":"Horizontal"}</button><button class="btn" data-act="mcancel">Cancel</button><button class="btn primary" data-act="mconfirm" style="margin-left:auto">Dive here</button></div>`}
+    else{let st;if(game.winner)st=game.winner===me?"Victory":"Fleet lost";else if(game.pending)st=game.pending.by===me?(game.pending.kind==="sonar"?"Sonar pinging…":"Shot away…"):"Incoming…";else if(sonarMode&&myTurn())st="Tap to drop sonar";else st=game.turn===me?"Your shot":"Enemy is aiming";
+      if(game.winner)h+=`<div class="banner">${st}</div><div class="row" style="margin-bottom:10px"><button class="btn primary" data-act="new">New game</button></div>`;
+      else h+=`<div class="status ${myTurn()?"go":""}">${st}</div>`;
+      if(game.subMovedAt?.[o]!==undefined&&!game.winner)h+=`<p class="note">Enemy sub has relocated. Faded rings are old misses you can fire at again.</p>`;
+      if(!game.winner&&gone(game,o))h+=`<div class="warn">Your opponent hasn't been seen for over 2 minutes.<div class="row" style="margin-top:8px"><button class="btn small" data-act="endgame">End game and take the win</button></div></div>`;
+      const sunkIds=new Set((game.shots?.[me]||[]).filter(x=>x.sunk).map(x=>x.sunk)),left=FLEET.filter(f=>!sunkIds.has(f.id)).length;
+      h+=`<h2 style="margin-top:4px">Enemy waters</h2>${board("target")}<div class="chips" aria-label="Enemy fleet">${FLEET.map(f=>`<span class="chip ${sunkIds.has(f.id)?"gone":""}">${f.name} ${f.len}</span>`).join("")}</div><p class="note">${left} of ${FLEET.length} enemy ships afloat.${game.decoys?" One of your hits may be a decoy.":""}${game.mine?" A sea mine is drifting in these waters.":""}</p>`;
+      if(!game.winner){const used=game.subMovedAt?.[me]!==undefined;const hasSonar=game.sonar&&(getStats().charge||game.sonarUsed?.[me]);
+        if(sonarMode)h+=`<div class="row" style="margin-top:10px"><span class="note">Sonar reveals the 9 squares around where you drop it. It doesn't use your turn.</span><button class="btn small" data-act="sonarcancel">Cancel</button></div>`;
+        else if(hasSonar)h+=`<div class="row" style="margin-top:10px"><button class="btn" data-act="sonarstart" ${canSonar()?"":"disabled"}>Sonar</button><span class="note">${game.sonarUsed?.[me]?"Sonar used":"One use"}</span></div>`;
+        h+=`<div class="row" style="margin-top:10px"><button class="btn" data-act="mstart" ${canMove()&&!sonarMode?"":"disabled"}>Move submarine</button><span class="note">${used?"Sub move used":subDamaged()?"Sub is damaged and can't move":"One move per game"}</span></div>`}
+      h+=`<h2>Your fleet</h2>${board("own")}`}}
+  if(sheet)h+=soundSheet();
+  const jc=document.getElementById("joincode")?.value;app.innerHTML=h;if(jc){const el=document.getElementById("joincode");if(el)el.value=jc}}
+function settingsSummary(){return `Decoy ${game.decoys?"on":"off"}. Sonar ${game.sonar?"on":"off"}. Sea mine ${game.mine?`on, moves ${mineText(game.mineWait||1)}`:"off"}.`}
+function mineText(w){return `every ${w+1} enemy shots`}
+function decoyRow(){const host=game.players[0]===me,locked=game.players.some(p=>game.ready?.[p]),edit=host&&!locked,w=game.mine?(game.mineWait||1):0;
+  const sw=(act,on)=>edit?`<button class="btn small" data-act="${act}">${on?"On":"Off"}</button>`:`<span class="note">${on?"On":"Off"}</span>`;
+  return `<div class="toggle"><div><b>Decoy</b><div class="note">A single square that registers as a normal hit but never sinks.</div></div>${sw("decoys",game.decoys)}</div>
+  <div class="toggle"><div><b>Sonar</b><div class="note">A player who loses 3 games in a row earns one sonar drop that reveals 9 squares.</div></div>${sw("sonarset",game.sonar)}</div>
+  ${game.sonar?(()=>{const st=getStats();return `<p class="note">${st.charge?"You have a sonar drop ready.":`Your losing streak: ${st.streak} of 3.`}</p>`})():""}
+  <div class="toggle" style="flex-wrap:wrap"><div style="flex-basis:100%"><b>Sea mine</b><div class="note">Hidden in each side's waters. Hitting it blasts every ship in the 8 squares around it. It jumps to a random open square. Pick how many turns it waits before moving.</div></div>
+  <div class="seg" style="margin-top:6px">${[0,1,2,3].map(n=>edit?`<button class="btn small ${w===n?"on":""}" data-act="minewait" data-n="${n}">${n?n:"Off"}</button>`:`<span class="chip ${w===n?"":"gone"}" style="text-decoration:none">${n?n:"Off"}</span>`).join("")}</div></div>`}
+function soundSheet(){const canRec=true;
+  return `<div class="sheet" data-act="sclose-bg"><div class="inner" role="dialog" aria-label="Sounds"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Sounds</h2><button class="btn small" data-act="sclose">Done</button></div>
+  <p class="note">Custom sounds stay on this phone. Your opponent hears their own set.</p>
+  ${SOUNDS.map(([k,n])=>`<div class="snd"><div><span class="name">${n}</span>${custom[k]?'<span class="tag">custom</span>':""}</div><div class="row">
+   <button class="btn small" data-act="splay" data-k="${k}">Play</button>
+   ${canRec?`<button class="btn small ${recKey===k?"rec":""}" data-act="srec" data-k="${k}">${recKey===k?"Stop":"Record"}</button>`:""}
+   <button class="btn small" data-act="sfile" data-k="${k}">File</button>
+   ${custom[k]?`<button class="btn small" data-act="sreset" data-k="${k}">Reset</button>`:""}</div></div>`).join("")}</div></div>`}
+
+/* ---------- input ---------- */
+async function toggleRec(k){if(recorder){recorder.stop();return}
+  try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});const chunks=[];recorder=new MediaRecorder(stream);recKey=k;
+    recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());const key=recKey;recorder=null;recKey=null;if(chunks.length)saveSound(key,new Blob(chunks,{type:chunks[0].type||"audio/webm"}));else render()};
+    recorder.start();setTimeout(()=>{if(recorder&&recKey===k)recorder.stop()},4000);render()}
+  catch{recorder=null;recKey=null;render();toast("Microphone blocked. Allow it in your browser settings, or use File.")}}
+["filepick","recpick"].forEach(id=>document.getElementById(id).addEventListener("change",e=>{const f=e.target.files?.[0];if(f&&pickKey){if(f.size>5e6)toast("Keep sounds under 5 MB");else saveSound(pickKey,f)}e.target.value=""}));
+app.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.id==="joincode")joinGame(e.target.value)});
+app.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)return;const a=el.dataset.act,r=+el.dataset.r,c=+el.dataset.c,k=el.dataset.k;
+  if(a==="sclose-bg"&&e.target!==el)return;
+  switch(a){
+    case"new":actx();createGame();break;
+    case"join":actx();joinGame(document.getElementById("joincode")?.value);break;
+    case"leave":leave();break;
+    case"invite":{const url=location.origin+location.pathname+"?g="+code;if(navigator.share)navigator.share({title:"Deep Salvo",text:"Join my game: "+code,url}).catch(()=>{});else navigator.clipboard?.writeText(url).then(()=>toast("Invite link copied"),()=>toast(url));break}
+    case"pick":sel=el.dataset.id;placeV=!!fleet.find(s=>s.id===sel)?.v;render();break;
+    case"rotate":{placeV=!placeV;const s=fleet.find(x=>x.id===sel),n=nearestFit({...s,v:placeV},fleet);if(n)fleet=fleet.map(x=>x.id===sel?n:x);else{placeV=!placeV;toast("No open space for that")}render();break}
+    case"shuffle":fleet=newFleet();render();break;
+    case"place":{const s=fleet.find(x=>x.id===sel),n=nearestFit({...s,r,c,v:placeV},fleet);if(n)fleet=fleet.map(x=>x.id===sel?n:x);else toast("No open space for that");render();break}
+    case"decoys":if(game&&game.players[0]===me&&!game.players.some(p=>game.ready?.[p]))gref().update({decoys:!game.decoys}).catch(()=>toast("Couldn't change the setting"));break;
+    case"minewait":if(game&&game.players[0]===me&&!game.players.some(p=>game.ready?.[p]))gref().update({mine:+el.dataset.n>0,mineWait:+el.dataset.n}).catch(()=>toast("Couldn't change the setting"));break;
+    case"sonarset":if(game&&game.players[0]===me&&!game.players.some(p=>game.ready?.[p]))gref().update({sonar:!game.sonar}).catch(()=>toast("Couldn't change the setting"));break;
+    case"sonarstart":if(canSonar()){sonarMode=true;render()}break;
+    case"sonarcancel":sonarMode=false;render();break;
+    case"sonarcell":dropSonar(r,c);break;
+    case"endgame":if(game&&bothReady()&&!game.winner&&gone(game,opp()))gref().update({winner:me,turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:opp(),final:true}}).catch(()=>toast("Couldn't end the game"));break;
+    case"ready":ready();break;
+    case"fire":fire(r,c);break;
+    case"mstart":if(canMove()){moveDraft={...fleet.find(s=>s.id==="sub")};render()}break;
+    case"movecell":{const n={...moveDraft,r,c};if(fits(n,fleet,"sub"))moveDraft=n;else toast("Doesn't fit there");render();break}
+    case"mrotate":{const n={...moveDraft,v:!moveDraft.v};if(fits(n,fleet,"sub"))moveDraft=n;else toast("No room to rotate there");render();break}
+    case"mcancel":moveDraft=null;render();break;
+    case"mconfirm":confirmMove();break;
+    case"sounds":actx();sheet=true;render();break;
+    case"sclose":case"sclose-bg":if(recorder)recorder.stop();sheet=false;render();break;
+    case"splay":actx();play(k);break;
+    case"srec":if(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder)toggleRec(k);else{pickKey=k;document.getElementById("recpick").click()}break;
+    case"sfile":pickKey=k;document.getElementById("filepick").click();break;
+    case"sreset":saveSound(k,null);break;
+  }});
+
+/* ---------- boot ---------- */
+(async()=>{render();
+  try{const all=await idbAll();for(const k in all)setCustom(k,all[k])}catch{}
+  if(!firebaseConfig.apiKey){render();return}
+  try{const fa=initializeApp(firebaseConfig),auth=getAuth(fa);await signInAnonymously(auth);me=auth.currentUser.uid;db=makeDb(getFirestore(fa))}
+  catch(e){app.innerHTML=hdr()+`<p>Couldn't connect to Firebase. Check that Anonymous sign-in is enabled.</p>`;return}
+  const inv=new URLSearchParams(location.search).get("g");
+  if(inv){history.replaceState(null,"",location.pathname);joinGame(inv)}
+  else{const saved=lsGet("ds-code");if(saved)openGame(saved);else render()}})();
+</script>
+</body>
+</html>
