@@ -82,6 +82,10 @@ input.code{font:800 1.6rem "Big Shoulders Stencil Display",Impact,sans-serif;let
 .cell.so-mine{box-shadow:inset 0 0 0 3px var(--draft);color:var(--draft)}
 .cell.so-mine::after{content:"✹"}
 .cell.so-empty{box-shadow:inset 0 0 0 1px var(--draft)}
+.cell.mymine::after{content:"✹";color:var(--brass);font-weight:800}
+.cell.reveal{background:var(--ship);opacity:.55}
+.cell.reveal-mine::after{content:"✹";color:var(--brass);opacity:.8}
+.score{font:800 1.1rem "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.03em;margin:2px 0 6px}
 .cell.decoy{box-shadow:inset 0 0 0 2px var(--brass)}
 .cell.decoy.hit{background:var(--brass);color:#fff}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -100,7 +104,7 @@ input.code{font:800 1.6rem "Big Shoulders Stencil Display",Impact,sans-serif;let
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc as fdoc, getDoc, setDoc, updateDoc, onSnapshot, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc as fdoc, getDoc, setDoc, updateDoc, onSnapshot, deleteField, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ===== PASTE YOUR FIREBASE CONFIG HERE ===== */
 const firebaseConfig = {
@@ -125,7 +129,7 @@ const DECOY={id:"decoy",name:"Decoy",len:1};const STALE=120000;
 const SOUNDS=[["fire","Fire"],["miss","Miss"],["hit","Hit"],["sunk","Ship sunk"],["move","Sub moved"],["mine","Sea mine"],["sonar","Sonar ping"],["win","Victory"],["lose","Defeat"]];
 
 let db=null, me=null, code=null, game=null, unsub=null, fleet=null, lastSeq=null, resolvingId=null, busy=false;
-let hb=null, mine=null, sonarMode=false, sel="carrier", placeV=false, moveDraft=null, sheet=false, recKey=null, recorder=null, pickKey=null;
+let hb=null, mine=null, sonarMode=false, lastRound=null, revealedRound=null, sel="carrier", placeV=false, moveDraft=null, sheet=false, recKey=null, recorder=null, pickKey=null;
 const custom={}, urls={};
 const app=document.getElementById("app");
 
@@ -139,16 +143,18 @@ function addDecoy(ships){const d=nearestFit({...DECOY,v:false,r:rand(N),c:rand(N
 const blocked=st=>st==="hit"||st==="miss"||st==="mine";
 const shipAt=(r,c)=>fleet.find(s=>cells(s).some(([a,b])=>a===r&&b===c));
 function randomMine(avoid){const open=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(shipAt(r,c)||avoid.has(r+","+c))continue;open.push({r,c})}return open.length?{...open[rand(open.length)],n:0}:null}
+function savedSettings(){const d={decoys:false,mine:false,mineWait:0,sonar:false};try{return{...d,...JSON.parse(lsGet("ds-settings")||"{}")}}catch{return d}}
 const statsKey=()=>"ds-stats-"+me;
 function getStats(){try{return {streak:0,charge:false,counted:[],...JSON.parse(lsGet(statsKey())||"{}")}}catch{return{streak:0,charge:false,counted:[]}}}
 function putStats(st){lsSet(statsKey(),JSON.stringify(st))}
-function recordResult(g){const st=getStats(),key=g.code+":"+(g.created||0);if(st.counted.includes(key))return;
+function recordResult(g){const st=getStats(),key=g.code+":"+(g.created||0)+":"+(g.round||1);if(st.counted.includes(key))return;
   st.counted=[...st.counted.slice(-30),key];let earned=false;
   if(g.winner===me)st.streak=0;else{st.streak++;if(st.streak>=3){st.charge=true;st.streak=0;earned=true}}
   putStats(st);if(earned)setTimeout(()=>toast("Three losses in a row. Sonar unlocked for a future game."),3200)}
 const canSonar=()=>myTurn()&&game.sonar&&getStats().charge&&!game.sonarUsed?.[me];
 const saveFleet=()=>fref().set({ships:fleet.map(({id,len,r,c,v})=>({id,len,r,c,v})),mine:mine||null});
-const newFleet=()=>game?.decoys?addDecoy(randomFleet()):randomFleet();
+const newFleetFor=g=>g?.decoys?addDecoy(randomFleet()):randomFleet();
+const newFleet=()=>newFleetFor(game);
 const isDecoyAt=(r,c)=>fleet?.some(s=>s.id==="decoy"&&s.r===r&&s.c===c);
 const gone=(g,uid)=>Date.now()-(g.seen?.[uid]||0)>STALE;
 function lsGet(k){try{return localStorage.getItem(k)}catch{return null}}
@@ -187,7 +193,7 @@ async function saveSound(k,blob){setCustom(k,blob);try{await idbPut(k,blob||null
 /* ---------- game flow ---------- */
 function genCode(){const A="ABCDEFGHJKLMNPQRSTUVWXYZ";return Array.from({length:4},()=>A[rand(A.length)]).join("")}
 async function createGame(){if(busy)return;busy=true;const c=genCode();
-  try{await db.doc("games/"+c).set({code:c,players:[me],ready:{},shots:{[me]:[]},seen:{[me]:Date.now()},decoys:false,mine:false,mineWait:0,sonar:false,turn:me,pending:null,subMovedAt:{},event:{seq:0},winner:null,created:Date.now()});await openGame(c)}
+  try{await db.doc("games/"+c).set({code:c,players:[me],ready:{},shots:{[me]:[]},seen:{[me]:Date.now()},...savedSettings(),round:1,score:{},turn:me,pending:null,subMovedAt:{},event:{seq:0},winner:null,created:Date.now()});await openGame(c)}
   catch(e){toast("Couldn't create a game. Check your connection.")}busy=false}
 async function joinGame(raw){const c=(raw||"").trim().toUpperCase();if(c.length!==4){toast("Codes are 4 letters");return}if(busy)return;busy=true;
   try{const ref=db.doc("games/"+c),s=await ref.get();if(!s.exists){toast("No game with code "+c);busy=false;return}
@@ -211,7 +217,7 @@ async function openGame(c){if(unsub)unsub();code=c;lsSet("ds-code",c);game=null;
 function localLeave(){if(unsub)unsub();unsub=null;stopHb();sonarMode=false;code=null;game=null;fleet=null;moveDraft=null;lsSet("ds-code",null);render()}
 async function leave(){const g=game;if(unsub)unsub();unsub=null;
   if(g&&g.players.includes(me)&&!g.winner){const o=opp();
-    try{if(bothReady())await gref().update({winner:o,turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:me,final:true}});
+    try{if(bothReady())await gref().update({winner:o,["score."+o]:increment(1),turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:me,final:true}});
       else{const keep=g.players.filter(p=>p!==me);await gref().update({players:keep,turn:keep[0]||null,["ready."+me]:deleteField(),["shots."+me]:deleteField(),["seen."+me]:deleteField()})}}catch{}}
   localLeave()}
 function beat(){if(code&&game&&game.players.includes(me)&&!document.hidden)gref().update({["seen."+me]:Date.now()}).catch(()=>{})}
@@ -221,6 +227,11 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){beat();re
 function onGame(g){const first=!game;game=g;
   if(!g.players.includes(me)){toast("You're no longer in that game");localLeave();return}
   if(first)beat();
+  const rnd=g.round||1;
+  if(lastRound!==null&&rnd!==lastRound){fleet=newFleetFor(g);mine=null;moveDraft=null;sonarMode=false;resolvingId=null;revealedRound=null}
+  lastRound=rnd;
+  if(g.players[0]===me)lsSet("ds-settings",JSON.stringify({decoys:!!g.decoys,mine:!!g.mine,mineWait:g.mineWait||0,sonar:!!g.sonar}));
+  if(g.winner&&fleet&&!g.reveal?.[me]&&revealedRound!==rnd){revealedRound=rnd;gref().update({["reveal."+me]:{ships:fleet.map(({id,len,r,c,v})=>({id,len,r,c,v})),mine:mine?{r:mine.r,c:mine.c}:null}}).catch(()=>{revealedRound=null})}
   if(g.winner)recordResult(g);
   if(!myTurnFor(g))sonarMode=false;
   if(fleet&&!g.ready?.[me]){const hasD=fleet.some(s=>s.id==="decoy");if(g.decoys&&!hasD)fleet=addDecoy(fleet);if(!g.decoys&&hasD){fleet=fleet.filter(s=>s.id!=="decoy");if(sel==="decoy")sel="carrier"}}
@@ -237,6 +248,7 @@ function announce(ev){const mine=ev.by===me,at=ev.r!=null?lab(ev.r,ev.c):"";
     if(ev.final)setTimeout(()=>play(mine?"win":"lose"),1800)}
   if(ev.type==="ping"){play("sonar");if(!mine)toast(`Enemy sonar pinging near ${at}`)}
   if(ev.type==="sonar"&&mine)toast(`Sonar: ${ev.contacts} contact${ev.contacts===1?"":"s"} around ${at}`)
+  if(ev.type==="round")toast(`Round ${game?.round||""}. Deploy your fleet.`);
   if(ev.type==="forfeit"){if(!mine){toast("Opponent left. You win.");play("win")}}
   if(ev.type==="sunk"){play("sunk");toast(mine?`You sank their ${NAME[ev.ship]}`:`They sank your ${NAME[ev.ship]}`);if(ev.final)setTimeout(()=>play(mine?"win":"lose"),1600)}
   if(ev.type==="move"){play("move");toast(mine?"Submarine relocated":"Enemy submarine has moved. Old misses are open again.")}}
@@ -258,7 +270,7 @@ async function resolve(g){const p=g.pending;resolvingId=p.id;const att=p.by,arr=
   const won=real.every(sh=>cells(sh).every(([r,c])=>hs.has(r+","+c)));
   const type=boom?"mine":sunk.length?"sunk":newE[0].res;
   const upd={["shots."+att]:arr,pending:null,turn:won?null:me,event:{seq:(g.event?.seq||0)+1,type,by:att,r:p.r,c:p.c,ship:sunk[0]||null,sunkList:sunk,hits:newE.filter(x=>x.res==="hit").length,final:won}};
-  if(won)upd.winner=att;
+  if(won){upd.winner=att;upd["score."+att]=increment(1)}
   try{await gref().update(upd)}catch{resolvingId=null;toast("Couldn't report the shot. Retrying on next update.");return}
   if(boom)mine=null;
   else if(mine){mine.n=(mine.n||0)+1;if(mine.n>(g.mineWait||1))mine=randomMine(new Set(arr.map(x=>x.r+","+x.c)))}
@@ -274,6 +286,9 @@ function subDamaged(){const sub=fleet.find(s=>s.id==="sub"),m=incomingMap();retu
 const canMove=()=>myTurn()&&game.subMovedAt?.[me]===undefined&&!subDamaged();
 async function fire(r,c){if(!myTurn()||busy)return;const st=targetMap()[r+","+c];if(blocked(st))return;actx();busy=true;
   try{await gref().update({pending:{id:Math.random().toString(36).slice(2),by:me,r,c},event:{seq:seq(),type:"fire",by:me,r,c}})}catch{toast("Shot didn't go through. Try again.")}busy=false}
+async function nextRound(){if(!game||!game.winner||busy)return;busy=true;const loser=game.players.find(p=>p!==game.winner)||game.players[0];
+  try{await gref().update({round:(game.round||1)+1,ready:{},shots:Object.fromEntries(game.players.map(p=>[p,[]])),pending:null,subMovedAt:{},pings:{},sonarUsed:{},reveal:{},winner:null,turn:loser,event:{seq:seq(),type:"round",by:me}})}
+  catch{toast("Couldn't start the next round. Try again.")}busy=false}
 async function dropSonar(r,c){if(!canSonar()||busy)return;busy=true;
   try{await gref().update({pending:{id:Math.random().toString(36).slice(2),by:me,r,c,kind:"sonar"},["sonarUsed."+me]:true,event:{seq:seq(),type:"ping",by:me,r,c}});
     const st=getStats();st.charge=false;putStats(st);sonarMode=false}catch{toast("Sonar didn't go through. Try again.")}busy=false;render()}
@@ -291,13 +306,13 @@ function board(kind){const tm=kind==="target"?targetMap():null,im=kind!=="target
   let h=`<div class="board ${kind}${armed?" armed":""}"><span class="lab"></span>`;for(let c=0;c<N;c++)h+=`<span class="lab">${c+1}</span>`;
   const own=kind==="move"?fleet.filter(s=>s.id!=="sub"):fleet;
   for(let r=0;r<N;r++){h+=`<span class="lab">${ROWS[r]}</span>`;for(let c=0;c<N;c++){const k=r+","+c;let cls=[],act="";
-    if(kind==="target"){if(tm["S"+k])cls.push("sunk");else if(tm[k])cls.push(tm[k]);else{const so=game.pings?.[me]?.cells?.[k];if(so)cls.push("so-"+so)}if(sonarMode&&armed)act="sonarcell";else if(armed&&!blocked(tm[k])&&!tm["S"+k])act="fire"}
+    if(kind==="target"){const rv=game.winner&&game.reveal?.[opp()];if(tm["S"+k])cls.push("sunk");else if(tm[k])cls.push(tm[k]);else if(rv&&rv.ships.some(sh=>cells(sh).some(([a,b])=>a===r&&b===c)))cls.push("reveal");else if(rv&&rv.mine&&rv.mine.r===r&&rv.mine.c===c)cls.push("reveal-mine");else{const so=game.pings?.[me]?.cells?.[k];if(so)cls.push("so-"+so)}if(sonarMode&&armed)act="sonarcell";else if(armed&&!blocked(tm[k])&&!tm["S"+k])act="fire"}
     else{const ship=own.find(s=>cells(s).some(([a,b])=>a===r&&b===c));if(ship)cls.push(kind==="place"&&ship.id===sel?"sel":ship.id==="decoy"?"decoy":"ship");
       if(kind==="move"){const orig=fleet.find(s=>s.id==="sub");if(moveDraft&&cells(moveDraft).some(([a,b])=>a===r&&b===c))cls.push("draft");else if(cells(orig).some(([a,b])=>a===r&&b===c))cls.push("ghost");act="movecell"}
-      if(kind==="place")act="place";if(im[k])cls.push(im[k])}
+      if(kind==="place")act="place";if(im[k])cls.push(im[k]);else if((kind==="own"||kind==="move")&&mine&&mine.r===r&&mine.c===c)cls.push("mymine")}
     h+=`<button class="cell ${cls.join(" ")}" ${act?`data-act="${act}"`:'tabindex="-1"'} data-r="${r}" data-c="${c}" aria-label="${lab(r,c)} ${cls.join(" ")}"></button>`}}
   return h+"</div>"}
-function hdr(){return `<header><h1>Deep Salvo</h1><div class="row">${code?`<button class="btn small" data-act="leave">Leave</button>`:""}<button class="btn small" data-act="sounds">Sounds</button></div></header>`}
+function hdr(){return `<header><h1>Deep Salvo <span class="note" style="font:600 .8rem Barlow,sans-serif">v7</span></h1><div class="row">${code?`<button class="btn small" data-act="leave">Leave</button>`:""}<button class="btn small" data-act="sounds">Sounds</button></div></header>`}
 function render(){let h=hdr();
   if(!db){h+=firebaseConfig.apiKey?`<p class="muted">Connecting…</p>`:`<p>Add your Firebase config at the top of this file to play.</p>`}
   else if(!code){h+=`<p class="muted">Classic 10×10 naval battle for two phones. Each side may relocate its submarine once, if it hasn't been hit.</p>
@@ -306,6 +321,7 @@ function render(){let h=hdr();
   else if(!game){h+=`<p class="muted">Connecting to game ${code}…</p>`}
   else{const two=game.players.length===2,iReady=!!game.ready?.[me],o=opp();
     if(!two)h+=`<div class="codebox">Send this code to your opponent<br><b>${code}</b><div class="row" style="margin-top:8px"><button class="btn small" data-act="invite">Send invite link</button></div></div>`;
+    h+=scoreLine();
     if(!iReady){h+=`<div class="status">Position your fleet</div><p class="note">Pick a ship, then tap where its bow goes.</p>
       ${decoyRow()}<div class="tray">${(game.decoys?[...FLEET,DECOY]:FLEET).map(f=>`<button class="${sel===f.id?"on":""}" data-act="pick" data-id="${f.id}">${f.name} ${f.len}</button>`).join("")}</div>
       ${board("place")}<div class="row" style="margin-top:12px"><button class="btn" data-act="rotate">${placeV?"Vertical":"Horizontal"}</button><button class="btn" data-act="shuffle">Shuffle</button><button class="btn primary" data-act="ready" style="margin-left:auto">Ready</button></div>`}
@@ -313,7 +329,7 @@ function render(){let h=hdr();
     else if(moveDraft){h+=`<div class="status">Move your submarine</div><p class="note">Tap a new bow position. Moving uses your turn.</p>${board("move")}
       <div class="row" style="margin-top:12px"><button class="btn" data-act="mrotate">${moveDraft.v?"Vertical":"Horizontal"}</button><button class="btn" data-act="mcancel">Cancel</button><button class="btn primary" data-act="mconfirm" style="margin-left:auto">Dive here</button></div>`}
     else{let st;if(game.winner)st=game.winner===me?"Victory":"Fleet lost";else if(game.pending)st=game.pending.by===me?(game.pending.kind==="sonar"?"Sonar pinging…":"Shot away…"):"Incoming…";else if(sonarMode&&myTurn())st="Tap to drop sonar";else st=game.turn===me?"Your shot":"Enemy is aiming";
-      if(game.winner)h+=`<div class="banner">${st}</div><div class="row" style="margin-bottom:10px"><button class="btn primary" data-act="new">New game</button></div>`;
+      if(game.winner)h+=`<div class="banner">${st}</div><div class="row" style="margin-bottom:6px"><button class="btn primary" data-act="nextround">Next round</button></div><p class="note">Same opponent, same code, same settings. Loser fires first. ${game.reveal?.[o]?"Unsunk enemy ships are shown in gray.":""}</p>`;
       else h+=`<div class="status ${myTurn()?"go":""}">${st}</div>`;
       if(game.subMovedAt?.[o]!==undefined&&!game.winner)h+=`<p class="note">Enemy sub has relocated. Faded rings are old misses you can fire at again.</p>`;
       if(!game.winner&&gone(game,o))h+=`<div class="warn">Your opponent hasn't been seen for over 2 minutes.<div class="row" style="margin-top:8px"><button class="btn small" data-act="endgame">End game and take the win</button></div></div>`;
@@ -326,6 +342,7 @@ function render(){let h=hdr();
       h+=`<h2>Your fleet</h2>${board("own")}`}}
   if(sheet)h+=soundSheet();
   const jc=document.getElementById("joincode")?.value;app.innerHTML=h;if(jc){const el=document.getElementById("joincode");if(el)el.value=jc}}
+function scoreLine(){if(!game||game.players.length<2)return"";const sc=game.score||{},o=opp();return `<div class="score">Round ${game.round||1} &nbsp; You ${sc[me]||0} &ndash; ${sc[o]||0} Opponent</div>`}
 function settingsSummary(){return `Decoy ${game.decoys?"on":"off"}. Sonar ${game.sonar?"on":"off"}. Sea mine ${game.mine?`on, moves ${mineText(game.mineWait||1)}`:"off"}.`}
 function mineText(w){return `every ${w+1} enemy shots`}
 function decoyRow(){const host=game.players[0]===me,locked=game.players.some(p=>game.ready?.[p]),edit=host&&!locked,w=game.mine?(game.mineWait||1):0;
@@ -370,7 +387,8 @@ app.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)
     case"sonarstart":if(canSonar()){sonarMode=true;render()}break;
     case"sonarcancel":sonarMode=false;render();break;
     case"sonarcell":dropSonar(r,c);break;
-    case"endgame":if(game&&bothReady()&&!game.winner&&gone(game,opp()))gref().update({winner:me,turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:opp(),final:true}}).catch(()=>toast("Couldn't end the game"));break;
+    case"nextround":nextRound();break;
+    case"endgame":if(game&&bothReady()&&!game.winner&&gone(game,opp()))gref().update({winner:me,["score."+me]:increment(1),turn:null,pending:null,event:{seq:seq(),type:"forfeit",by:opp(),final:true}}).catch(()=>toast("Couldn't end the game"));break;
     case"ready":ready();break;
     case"fire":fire(r,c);break;
     case"mstart":if(canMove()){moveDraft={...fleet.find(s=>s.id==="sub")};render()}break;
