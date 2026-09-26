@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep Salvo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#D6E1DF; --panel:#E6EDEB; --ink:#17293B; --soft:#4F6573; --grid:#9DB2B4; --sea:#C3D4D3;
+  --ship:#3E5566; --hit:#B8322A; --brass:#8E6A28; --draft:#2F7A6B;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0E1B26; --panel:#15283A; --ink:#D6E2E0; --soft:#8FA5B0; --grid:#2C4556; --sea:#12263A;
+  --ship:#7B94A4; --hit:#E0574B; --brass:#C9A45A; --draft:#4FB39E; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1B26; --panel:#15283A; --ink:#D6E2E0; --soft:#8FA5B0; --grid:#2C4556; --sea:#12263A;
+  --ship:#7B94A4; --hit:#E0574B; --brass:#C9A45A; --draft:#4FB39E; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:500 16px/1.45 Barlow,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+#app{max-width:480px;margin:0 auto;padding:12px 14px 28px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+h1{font:800 2rem/1 "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.02em;margin:0}
+h2{font:800 1.35rem/1.1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:18px 0 8px;letter-spacing:.02em}
+p{margin:.4em 0}
+.muted{color:var(--soft)}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{border:2px solid var(--ink);background:transparent;border-radius:6px;padding:10px 14px;font-weight:600;min-height:44px}
+.btn.primary{background:var(--ink);color:var(--bg)}
+.btn.small{padding:6px 10px;min-height:36px;font-size:.9rem}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,.cell:focus-visible,input:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.stretch>*{flex:1}
+input.code{font:800 1.6rem "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.2em;text-transform:uppercase;width:100%;padding:8px 12px;border:2px solid var(--ink);border-radius:6px;background:var(--panel);color:var(--ink)}
+.codebox{background:var(--panel);border-left:4px solid var(--brass);padding:10px 12px;margin:8px 0 12px;border-radius:0 6px 6px 0}
+.codebox b{font:800 1.8rem "Big Shoulders Stencil Display",Impact,sans-serif;letter-spacing:.2em}
+.status{font:800 1.5rem/1.1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:6px 0 10px;min-height:1.7rem}
+.status.go{color:var(--hit)}
+.board{display:grid;grid-template-columns:1.1rem repeat(10,1fr);gap:2px;width:100%;margin:0 auto;user-select:none}
+.board.own{max-width:300px}
+.lab{font-size:.68rem;color:var(--soft);display:flex;align-items:center;justify-content:center}
+.cell{aspect-ratio:1;border:0;border-radius:2px;background:var(--sea);padding:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;line-height:1;position:relative}
+.cell[data-act="fire"]:active,.cell[data-act="place"]:active,.cell[data-act="movecell"]:active{transform:scale(.9)}
+.cell.ship{background:var(--ship)}
+.cell.sel{background:var(--brass)}
+.cell.ghost{background:transparent;outline:2px dashed var(--ship);outline-offset:-3px}
+.cell.draft{background:var(--draft)}
+.cell.hit{color:var(--hit);font-weight:800}
+.cell.hit::after{content:"✕"}
+.cell.ship.hit{color:#fff;background:var(--hit)}
+.cell.sunk{background:var(--hit);color:#fff}
+.cell.sunk::after{content:"✕"}
+.cell.miss::after{content:"";width:28%;height:28%;border-radius:50%;background:var(--ink);opacity:.7}
+.cell.stale::after{content:"";width:34%;height:34%;border-radius:50%;border:1.5px solid var(--soft);opacity:.7}
+.cell.target{background:var(--sea)}
+.board.armed .cell[data-act="fire"]{box-shadow:inset 0 0 0 1px var(--grid)}
+.tray{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.tray button{border:2px solid var(--ship);background:transparent;border-radius:6px;padding:6px 10px;font-weight:600;font-size:.9rem;min-height:40px}
+.tray button.on{background:var(--brass);border-color:var(--brass);color:#fff}
+.note{font-size:.9rem;color:var(--soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;font-weight:600;max-width:90vw;z-index:20;transition:opacity .2s}
+.toast[hidden]{display:block;opacity:0;pointer-events:none}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet .inner{background:var(--bg);width:100%;max-width:480px;max-height:85%;overflow:auto;border-radius:12px 12px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.snd{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;padding:10px 0;border-bottom:1px solid var(--grid)}
+.snd .name{font-weight:600}
+.snd .tag{font-size:.8rem;color:var(--brass);margin-left:6px}
+.snd .row{justify-content:flex-end}
+.rec{background:var(--hit)!important;color:#fff!important;border-color:var(--hit)!important}
+.banner{font:800 3rem/1 "Big Shoulders Stencil Display",Impact,sans-serif;margin:8px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"><p class="muted">Loading…</p></div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="filepick" accept="audio/*" hidden>
+<input type="file" id="recpick" accept="audio/*" capture hidden>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc as fdoc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ===== PASTE YOUR FIREBASE CONFIG HERE ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBcsUoFs2p9MBd_ZA5QdCznjmhYimHGmw0",
+  authDomain: "battle-ship-7f0d9.firebaseapp.com",
+  projectId: "battle-ship-7f0d9",
+  storageBucket: "battle-ship-7f0d9.firebasestorage.app",
+  messagingSenderId: "622001257172",
+  appId: "1:622001257172:web:841fb2a3f10a8d5ce11941"
+};
+/* =========================================== */
+
+function wrap(s){return{exists:s.exists(),data:()=>s.data(),metadata:s.metadata}}
+function makeDb(fs){return{doc(p){const r=fdoc(fs,p);return{
+  get:async()=>wrap(await getDoc(r)),set:d=>setDoc(r,d),update:d=>updateDoc(r,d),
+  onSnapshot:(n,e)=>onSnapshot(r,s=>n(wrap(s)),e)}}}}
+
+const N=10, ROWS="ABCDEFGHIJ";
+const FLEET=[{id:"carrier",name:"Carrier",len:5},{id:"battleship",name:"Battleship",len:4},{id:"cruiser",name:"Cruiser",len:3},{id:"sub",name:"Submarine",len:3},{id:"destroyer",name:"Destroyer",len:2}];
+const NAME=Object.fromEntries(FLEET.map(f=>[f.id,f.name]));
+const SOUNDS=[["fire","Fire"],["miss","Miss"],["hit","Hit"],["sunk","Ship sunk"],["move","Sub moved"],["win","Victory"],["lose","Defeat"]];
+
+let db=null, me=null, code=null, game=null, unsub=null, fleet=null, lastSeq=null, resolvingId=null, busy=false;
+let sel="carrier", placeV=false, moveDraft=null, sheet=false, recKey=null, recorder=null, pickKey=null;
+const custom={}, urls={};
+const app=document.getElementById("app");
+
+const lab=(r,c)=>ROWS[r]+(c+1);
+const rand=n=>Math.floor(Math.random()*n);
+function cells(s){const a=[];for(let i=0;i<s.len;i++)a.push([s.r+(s.v?i:0),s.c+(s.v?0:i)]);return a}
+function fits(s,ships,ignore){for(const[r,c]of cells(s)){if(r<0||c<0||r>=N||c>=N)return false;for(const o of ships){if(o.id===ignore||o.id===s.id)continue;if(cells(o).some(([a,b])=>a===r&&b===c))return false}}return true}
+function randomFleet(){for(;;){const ships=[];let ok=true;for(const f of FLEET){let p=false;for(let t=0;t<300&&!p;t++){const s={...f,v:Math.random()<.5,r:rand(N),c:rand(N)};if(fits(s,ships)){ships.push(s);p=true}}if(!p){ok=false;break}}if(ok)return ships}}
+function lsGet(k){try{return localStorage.getItem(k)}catch{return null}}
+function lsSet(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}}
+let toastT;function toast(m){const t=document.getElementById("toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+const opp=()=>game?.players?.find(p=>p!==me)||null;
+const gref=()=>db.doc("games/"+code);
+const fref=()=>db.doc(`fleets/${code}_${me}`);
+const seq=()=>(game?.event?.seq||0)+1;
+
+/* ---------- audio ---------- */
+let ac=null;
+function actx(){if(!ac){const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;ac=new A()}if(ac.state==="suspended")ac.resume();return ac}
+function noise(a,d){const b=a.createBuffer(1,Math.floor(a.sampleRate*d),a.sampleRate),x=b.getChannelData(0);for(let i=0;i<x.length;i++)x[i]=Math.random()*2-1;const s=a.createBufferSource();s.buffer=b;return s}
+function env(g,t,p,d){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(p,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+d)}
+function tone(a,t,f1,f2,d,p,type="sine"){const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.setValueAtTime(f1,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);env(g,t,p,d);o.connect(g).connect(a.destination);o.start(t);o.stop(t+d+.05)}
+function hiss(a,t,type,f1,f2,d,p){const n=noise(a,d),f=a.createBiquadFilter(),g=a.createGain();f.type=type;f.frequency.setValueAtTime(f1,t);f.frequency.exponentialRampToValueAtTime(f2,t+d);env(g,t,p,d);n.connect(f).connect(g).connect(a.destination);n.start(t)}
+const SYNTH={
+  fire:(a,t)=>{tone(a,t,170,40,.4,.8);hiss(a,t,"lowpass",1400,300,.3,.4)},
+  miss:(a,t)=>{hiss(a,t,"bandpass",3200,450,.9,.55)},
+  hit:(a,t)=>{hiss(a,t,"lowpass",2400,80,1.2,1);tone(a,t,95,30,.8,.9)},
+  sunk:(a,t)=>{hiss(a,t,"lowpass",2400,60,2.2,1);tone(a,t,110,28,1.6,.9);tone(a,t+.25,70,25,2,.6,"sawtooth")},
+  move:(a,t)=>{tone(a,t,1250,1180,.7,.5);tone(a,t+.5,1250,1180,.7,.18)},
+  win:(a,t)=>[392,523,659,784].forEach((f,i)=>tone(a,t+i*.14,f,0,.35,.35,"triangle")),
+  lose:(a,t)=>[392,330,262,196].forEach((f,i)=>tone(a,t+i*.2,f,0,.45,.35,"triangle"))
+};
+function play(k){if(urls[k]){const au=new Audio(urls[k]);au.play().catch(()=>{});return}const a=actx();if(a)SYNTH[k](a,a.currentTime+.02)}
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("deep-salvo-sounds",1);r.onupgradeneeded=()=>r.result.createObjectStore("s");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbPut(k,v){const d=await idb();return new Promise((res,rej)=>{const tx=d.transaction("s","readwrite"),st=tx.objectStore("s");v==null?st.delete(k):st.put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
+async function idbAll(){const d=await idb();return new Promise(res=>{const out={},rq=d.transaction("s").objectStore("s").openCursor();rq.onsuccess=()=>{const c=rq.result;if(c){out[c.key]=c.value;c.continue()}else res(out)};rq.onerror=()=>res(out)})}
+function setCustom(k,blob){if(urls[k])URL.revokeObjectURL(urls[k]);if(blob){custom[k]=blob;urls[k]=URL.createObjectURL(blob)}else{delete custom[k];delete urls[k]}}
+async function saveSound(k,blob){setCustom(k,blob);try{await idbPut(k,blob||null)}catch{toast("Sound works now but couldn't be saved on this phone")}render()}
+
+/* ---------- game flow ---------- */
+function genCode(){const A="ABCDEFGHJKLMNPQRSTUVWXYZ";return Array.from({length:4},()=>A[rand(A.length)]).join("")}
+async function createGame(){if(busy)return;busy=true;const c=genCode();
+  try{await db.doc("games/"+c).set({code:c,players:[me],ready:{},shots:{[me]:[]},turn:me,pending:null,subMovedAt:{},event:{seq:0},winner:null,created:Date.now()});await openGame(c)}
+  catch(e){toast("Couldn't create a game. Check your connection.")}busy=false}
+async function joinGame(raw){const c=(raw||"").trim().toUpperCase();if(c.length!==4){toast("Codes are 4 letters");return}if(busy)return;busy=true;
+  try{const s=await db.doc("games/"+c).get();if(!s.exists){toast("No game with code "+c);busy=false;return}
+    const g=s.data();if(!g.players.includes(me)){if(g.players.length>=2){toast("That game already has two players");busy=false;return}
+      await db.doc("games/"+c).update({players:[...g.players,me],["shots."+me]:[]})}
+    await openGame(c)}catch(e){toast("Couldn't join. Try again.")}busy=false}
+async function openGame(c){if(unsub)unsub();code=c;lsSet("ds-code",c);game=null;lastSeq=null;resolvingId=null;moveDraft=null;
+  fleet=null;try{const f=await fref().get();if(f.exists)fleet=f.data().ships}catch{}
+  if(!fleet)fleet=randomFleet();
+  unsub=gref().onSnapshot(snap=>{if(!snap.exists){if(snap.metadata.fromCache)return;toast("That game no longer exists");leave();return}onGame(snap.data())},()=>{toast("Lost the connection. Reopen the game.")});
+  render()}
+function leave(){if(unsub)unsub();unsub=null;code=null;game=null;fleet=null;lsSet("ds-code",null);render()}
+function onGame(g){game=g;
+  const ev=g.event||{seq:0};
+  if(lastSeq===null)lastSeq=ev.seq;else if(ev.seq>lastSeq){lastSeq=ev.seq;announce(ev)}
+  if(g.pending&&g.pending.by!==me&&g.players.includes(me)&&g.ready?.[me]&&g.pending.id!==resolvingId)resolve(g);
+  render()}
+function announce(ev){const mine=ev.by===me,at=ev.r!=null?lab(ev.r,ev.c):"";
+  if(ev.type==="fire"){play("fire");return}
+  if(ev.type==="miss"){play("miss");toast(mine?`Miss at ${at}`:`They missed at ${at}`)}
+  if(ev.type==="hit"){play("hit");toast(mine?`Hit at ${at}!`:`They hit you at ${at}`)}
+  if(ev.type==="sunk"){play("sunk");toast(mine?`You sank their ${NAME[ev.ship]}`:`They sank your ${NAME[ev.ship]}`);if(ev.final)setTimeout(()=>play(mine?"win":"lose"),1600)}
+  if(ev.type==="move"){play("move");toast(mine?"Submarine relocated":"Enemy submarine has moved. Old misses are open again.")}}
+async function resolve(g){const p=g.pending;resolvingId=p.id;const att=p.by,arr=[...(g.shots?.[att]||[])];
+  const ship=fleet.find(s=>cells(s).some(([r,c])=>r===p.r&&c===p.c));
+  const shot={r:p.r,c:p.c,res:ship?"hit":"miss"};arr.push(shot);let sunk=null,won=false;
+  if(ship){const hs=new Set(arr.filter(x=>x.res==="hit").map(x=>x.r+","+x.c));
+    if(cells(ship).every(([r,c])=>hs.has(r+","+c))){sunk=ship.id;shot.sunk=sunk;shot.cells=cells(ship).map(([r,c])=>r+","+c)}
+    won=fleet.every(s=>cells(s).every(([r,c])=>hs.has(r+","+c)))}
+  const upd={["shots."+att]:arr,pending:null,turn:won?null:me,event:{seq:(g.event?.seq||0)+1,type:sunk?"sunk":shot.res,by:att,r:p.r,c:p.c,ship:sunk,final:won}};
+  if(won)upd.winner=att;
+  try{await gref().update(upd)}catch{resolvingId=null;toast("Couldn't report the shot. Retrying on next update.")}}
+function shotsAt(list,staleFrom){const m={};(list||[]).forEach((s,i)=>{const k=s.r+","+s.c;const cur=m[k];const st=s.res==="hit"?"hit":(i>=staleFrom?"miss":"stale");if(!cur||cur!=="hit")m[k]=cur==="miss"&&st==="stale"?"miss":st;if(s.cells)s.cells.forEach(x=>m["S"+x]=1)});return m}
+function targetMap(){return shotsAt(game.shots?.[me],game.subMovedAt?.[opp()]??0)}
+function incomingMap(){return shotsAt(game.shots?.[opp()],game.subMovedAt?.[me]??0)}
+const bothReady=()=>game&&game.players.length===2&&game.players.every(p=>game.ready?.[p]);
+const myTurn=()=>bothReady()&&!game.winner&&game.turn===me&&!game.pending;
+function subDamaged(){const sub=fleet.find(s=>s.id==="sub"),m=incomingMap();return cells(sub).some(([r,c])=>m[r+","+c]==="hit")}
+const canMove=()=>myTurn()&&game.subMovedAt?.[me]===undefined&&!subDamaged();
+async function fire(r,c){if(!myTurn()||busy)return;const st=targetMap()[r+","+c];if(st==="hit"||st==="miss")return;actx();busy=true;
+  try{await gref().update({pending:{id:Math.random().toString(36).slice(2),by:me,r,c},event:{seq:seq(),type:"fire",by:me,r,c}})}catch{toast("Shot didn't go through. Try again.")}busy=false}
+async function ready(){if(busy)return;actx();busy=true;
+  try{await fref().set({ships:fleet.map(({id,len,r,c,v})=>({id,len,r,c,v}))});await gref().update({["ready."+me]:true})}catch(e){toast("Couldn't save your fleet. Try again.")}busy=false}
+async function confirmMove(){if(!canMove()||busy||!moveDraft)return;busy=true;const next=fleet.map(s=>s.id==="sub"?{...moveDraft}:s);
+  try{await fref().set({ships:next.map(({id,len,r,c,v})=>({id,len,r,c,v}))});fleet=next;
+    await gref().update({["subMovedAt."+me]:(game.shots?.[opp()]||[]).length,turn:opp(),event:{seq:seq(),type:"move",by:me}});moveDraft=null}
+  catch{toast("Move failed. Your sub stayed put.")}busy=false;render()}
+
+/* ---------- render ---------- */
+function board(kind){const tm=kind==="target"?targetMap():null,im=kind!=="target"&&game&&game.players.length===2?incomingMap():{};const armed=kind==="target"&&myTurn();
+  let h=`<div class="board ${kind}${armed?" armed":""}"><span class="lab"></span>`;for(let c=0;c<N;c++)h+=`<span class="lab">${c+1}</span>`;
+  const own=kind==="move"?fleet.filter(s=>s.id!=="sub"):fleet;
+  for(let r=0;r<N;r++){h+=`<span class="lab">${ROWS[r]}</span>`;for(let c=0;c<N;c++){const k=r+","+c;let cls=[],act="";
+    if(kind==="target"){if(tm["S"+k])cls.push("sunk");else if(tm[k])cls.push(tm[k]);if(armed&&tm[k]!=="hit"&&tm[k]!=="miss"&&!tm["S"+k])act="fire"}
+    else{const ship=own.find(s=>cells(s).some(([a,b])=>a===r&&b===c));if(ship)cls.push(kind==="place"&&ship.id===sel?"sel":"ship");
+      if(kind==="move"){const orig=fleet.find(s=>s.id==="sub");if(moveDraft&&cells(moveDraft).some(([a,b])=>a===r&&b===c))cls.push("draft");else if(cells(orig).some(([a,b])=>a===r&&b===c))cls.push("ghost");act="movecell"}
+      if(kind==="place")act="place";if(im[k])cls.push(im[k])}
+    h+=`<button class="cell ${cls.join(" ")}" ${act?`data-act="${act}"`:'tabindex="-1"'} data-r="${r}" data-c="${c}" aria-label="${lab(r,c)} ${cls.join(" ")}"></button>`}}
+  return h+"</div>"}
+function hdr(){return `<header><h1>Deep Salvo</h1><div class="row">${code?`<button class="btn small" data-act="leave">Leave</button>`:""}<button class="btn small" data-act="sounds">Sounds</button></div></header>`}
+function render(){let h=hdr();
+  if(!db){h+=firebaseConfig.apiKey?`<p class="muted">Connecting…</p>`:`<p>Add your Firebase config at the top of this file to play.</p>`}
+  else if(!code){h+=`<p class="muted">Classic 10×10 naval battle for two phones. Each side may relocate its submarine once, if it hasn't been hit.</p>
+    <h2>Start a game</h2><button class="btn primary" data-act="new" style="width:100%">New game</button>
+    <h2>Join a game</h2><div class="row stretch"><input class="code" id="joincode" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters"><button class="btn primary" data-act="join" style="flex:0 0 auto">Join</button></div>`}
+  else if(!game){h+=`<p class="muted">Connecting to game ${code}…</p>`}
+  else{const two=game.players.length===2,iReady=!!game.ready?.[me],o=opp();
+    if(!two)h+=`<div class="codebox">Send this code to your opponent<br><b>${code}</b><div class="row" style="margin-top:8px"><button class="btn small" data-act="invite">Send invite link</button></div></div>`;
+    if(!iReady){h+=`<div class="status">Position your fleet</div><p class="note">Pick a ship, then tap where its bow goes.</p>
+      <div class="tray">${FLEET.map(f=>`<button class="${sel===f.id?"on":""}" data-act="pick" data-id="${f.id}">${f.name} ${f.len}</button>`).join("")}</div>
+      ${board("place")}<div class="row" style="margin-top:12px"><button class="btn" data-act="rotate">${placeV?"Vertical":"Horizontal"}</button><button class="btn" data-act="shuffle">Shuffle</button><button class="btn primary" data-act="ready" style="margin-left:auto">Ready</button></div>`}
+    else if(!bothReady()){h+=`<div class="status">${two?"Waiting for opponent to deploy":"Waiting for opponent to join"}</div>${board("own")}`}
+    else if(moveDraft){h+=`<div class="status">Move your submarine</div><p class="note">Tap a new bow position. Moving uses your turn.</p>${board("move")}
+      <div class="row" style="margin-top:12px"><button class="btn" data-act="mrotate">${moveDraft.v?"Vertical":"Horizontal"}</button><button class="btn" data-act="mcancel">Cancel</button><button class="btn primary" data-act="mconfirm" style="margin-left:auto">Dive here</button></div>`}
+    else{let st;if(game.winner)st=game.winner===me?"Victory":"Fleet lost";else if(game.pending)st=game.pending.by===me?"Shot away…":"Incoming…";else st=game.turn===me?"Your shot":"Enemy is aiming";
+      if(game.winner)h+=`<div class="banner">${st}</div><div class="row" style="margin-bottom:10px"><button class="btn primary" data-act="new">New game</button></div>`;
+      else h+=`<div class="status ${myTurn()?"go":""}">${st}</div>`;
+      if(game.subMovedAt?.[o]!==undefined&&!game.winner)h+=`<p class="note">Enemy sub has relocated. Faded rings are old misses you can fire at again.</p>`;
+      h+=`<h2 style="margin-top:4px">Enemy waters</h2>${board("target")}`;
+      if(!game.winner){const used=game.subMovedAt?.[me]!==undefined;h+=`<div class="row" style="margin-top:10px"><button class="btn" data-act="mstart" ${canMove()?"":"disabled"}>Move submarine</button><span class="note">${used?"Sub move used":subDamaged()?"Sub is damaged and can't move":"One move per game"}</span></div>`}
+      h+=`<h2>Your fleet</h2>${board("own")}`}}
+  if(sheet)h+=soundSheet();
+  const jc=document.getElementById("joincode")?.value;app.innerHTML=h;if(jc){const el=document.getElementById("joincode");if(el)el.value=jc}}
+function soundSheet(){const canRec=true;
+  return `<div class="sheet" data-act="sclose-bg"><div class="inner" role="dialog" aria-label="Sounds"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Sounds</h2><button class="btn small" data-act="sclose">Done</button></div>
+  <p class="note">Custom sounds stay on this phone. Your opponent hears their own set.</p>
+  ${SOUNDS.map(([k,n])=>`<div class="snd"><div><span class="name">${n}</span>${custom[k]?'<span class="tag">custom</span>':""}</div><div class="row">
+   <button class="btn small" data-act="splay" data-k="${k}">Play</button>
+   ${canRec?`<button class="btn small ${recKey===k?"rec":""}" data-act="srec" data-k="${k}">${recKey===k?"Stop":"Record"}</button>`:""}
+   <button class="btn small" data-act="sfile" data-k="${k}">File</button>
+   ${custom[k]?`<button class="btn small" data-act="sreset" data-k="${k}">Reset</button>`:""}</div></div>`).join("")}</div></div>`}
+
+/* ---------- input ---------- */
+async function toggleRec(k){if(recorder){recorder.stop();return}
+  try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});const chunks=[];recorder=new MediaRecorder(stream);recKey=k;
+    recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+    recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());const key=recKey;recorder=null;recKey=null;if(chunks.length)saveSound(key,new Blob(chunks,{type:chunks[0].type||"audio/webm"}));else render()};
+    recorder.start();setTimeout(()=>{if(recorder&&recKey===k)recorder.stop()},4000);render()}
+  catch{recorder=null;recKey=null;render();toast("Microphone blocked. Allow it in your browser settings, or use File.")}}
+["filepick","recpick"].forEach(id=>document.getElementById(id).addEventListener("change",e=>{const f=e.target.files?.[0];if(f&&pickKey){if(f.size>5e6)toast("Keep sounds under 5 MB");else saveSound(pickKey,f)}e.target.value=""}));
+app.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.id==="joincode")joinGame(e.target.value)});
+app.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)return;const a=el.dataset.act,r=+el.dataset.r,c=+el.dataset.c,k=el.dataset.k;
+  if(a==="sclose-bg"&&e.target!==el)return;
+  switch(a){
+    case"new":actx();createGame();break;
+    case"join":actx();joinGame(document.getElementById("joincode")?.value);break;
+    case"leave":leave();break;
+    case"invite":{const url=location.origin+location.pathname+"?g="+code;if(navigator.share)navigator.share({title:"Deep Salvo",text:"Join my game: "+code,url}).catch(()=>{});else navigator.clipboard?.writeText(url).then(()=>toast("Invite link copied"),()=>toast(url));break}
+    case"pick":sel=el.dataset.id;placeV=!!fleet.find(s=>s.id===sel)?.v;render();break;
+    case"rotate":{placeV=!placeV;const s=fleet.find(x=>x.id===sel),n={...s,v:placeV};if(fits(n,fleet))fleet=fleet.map(x=>x.id===sel?n:x);else toast("No room to rotate there");render();break}
+    case"shuffle":fleet=randomFleet();render();break;
+    case"place":{const s=fleet.find(x=>x.id===sel),n={...s,r,c,v:placeV};if(fits(n,fleet))fleet=fleet.map(x=>x.id===sel?n:x);else toast("Doesn't fit there");render();break}
+    case"ready":ready();break;
+    case"fire":fire(r,c);break;
+    case"mstart":if(canMove()){moveDraft={...fleet.find(s=>s.id==="sub")};render()}break;
+    case"movecell":{const n={...moveDraft,r,c};if(fits(n,fleet,"sub"))moveDraft=n;else toast("Doesn't fit there");render();break}
+    case"mrotate":{const n={...moveDraft,v:!moveDraft.v};if(fits(n,fleet,"sub"))moveDraft=n;else toast("No room to rotate there");render();break}
+    case"mcancel":moveDraft=null;render();break;
+    case"mconfirm":confirmMove();break;
+    case"sounds":actx();sheet=true;render();break;
+    case"sclose":case"sclose-bg":if(recorder)recorder.stop();sheet=false;render();break;
+    case"splay":actx();play(k);break;
+    case"srec":if(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder)toggleRec(k);else{pickKey=k;document.getElementById("recpick").click()}break;
+    case"sfile":pickKey=k;document.getElementById("filepick").click();break;
+    case"sreset":saveSound(k,null);break;
+  }});
+
+/* ---------- boot ---------- */
+(async()=>{render();
+  try{const all=await idbAll();for(const k in all)setCustom(k,all[k])}catch{}
+  if(!firebaseConfig.apiKey){render();return}
+  try{const fa=initializeApp(firebaseConfig),auth=getAuth(fa);await signInAnonymously(auth);me=auth.currentUser.uid;db=makeDb(getFirestore(fa))}
+  catch(e){app.innerHTML=hdr()+`<p>Couldn't connect to Firebase. Check that Anonymous sign-in is enabled.</p>`;return}
+  const inv=new URLSearchParams(location.search).get("g");
+  if(inv){history.replaceState(null,"",location.pathname);joinGame(inv)}
+  else{const saved=lsGet("ds-code");if(saved)openGame(saved);else render()}})();
+</script>
+</body>
+</html>
